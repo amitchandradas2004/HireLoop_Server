@@ -34,7 +34,7 @@ async function run() {
 
     const database = client.db("hire_loop");
     const jobCollection = database.collection("jobs");
-
+    const companyCollection = database.collection("companies");
     app.get("/api/jobs", async (req, res) => {
       const query = {};
       if (req.query.companyId) {
@@ -54,6 +54,24 @@ async function run() {
       const result = await jobCollection.insertOne(job);
       res.send(result);
     });
+
+    //company related api will be here:
+
+    app.get("/api/my/companies", async (req, res) => {
+      const query = {};
+      if (req.query.recruiterId) {
+        query.recruiterId = req.query.recruiterId;
+      }
+      const result = await companyCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post("/api/companies", async (req, res) => {
+      const company = req.body;
+      const result = await companyCollection.insertOne(company);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
