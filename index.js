@@ -35,6 +35,13 @@ async function run() {
     const database = client.db("hire_loop");
     const jobCollection = database.collection("jobs");
     const companyCollection = database.collection("companies");
+    const usersCollection = database.collection("user");
+
+    app.get("/api/users", async (req, res) => {
+      const cursor = usersCollection.find().skip(1);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
     app.get("/api/jobs", async (req, res) => {
       const query = {};
       if (req.query.companyId) {
@@ -51,11 +58,21 @@ async function run() {
 
     app.post("/api/jobs", async (req, res) => {
       const job = req.body;
-      const result = await jobCollection.insertOne(job);
+
+      const newJob = {
+        ...job,
+        createdAt: new Date(),
+      };
+      const result = await jobCollection.insertOne(newJob);
       res.send(result);
     });
 
     //company related api will be here:
+    app.get("/api/companies", async (req, res) => {
+      const cursor = companyCollection.find().skip(7);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     app.get("/api/my/companies", async (req, res) => {
       const query = {};
@@ -63,12 +80,16 @@ async function run() {
         query.recruiterId = req.query.recruiterId;
       }
       const result = await companyCollection.findOne(query);
-      res.send(result);
+      res.send(result || {});
     });
 
     app.post("/api/companies", async (req, res) => {
       const company = req.body;
-      const result = await companyCollection.insertOne(company);
+      const newCompany = {
+        ...company,
+        createdAt: new Date(),
+      };
+      const result = await companyCollection.insertOne(newCompany);
       res.send(result);
     });
 
