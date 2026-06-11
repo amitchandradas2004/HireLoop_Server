@@ -37,7 +37,8 @@ async function run() {
     const companyCollection = database.collection("companies");
     const usersCollection = database.collection("user");
     const applicationsCollection = database.collection("applications");
-
+    const planCollection = database.collection("plans");
+    const subscriptionCollection = database.collection("subscription");
     app.get("/api/users", async (req, res) => {
       const cursor = usersCollection.find().skip(1);
       const result = await cursor.toArray();
@@ -78,7 +79,18 @@ async function run() {
     });
 
     //application related api will be here
-
+    app.get("/api/applications", async (req, res) => {
+      const query = {};
+      if (req.query.applicantId) {
+        query.applicantId = req.query.applicantId;
+      }
+      if (req.query.jobId) {
+        query.jobId = req.query.jobId;
+      }
+      const cursor = applicationsCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
     app.post("/api/applications", async (req, res) => {
       const application = req.body;
       const newApplication = {
@@ -115,6 +127,44 @@ async function run() {
       res.send(result);
     });
 
+    // Plans
+
+    app.get("/api/plans", async (req, res) => {
+      const query = {};
+      if (req.query.plan_id) {
+        query.id = req.query.plan_id;
+      }
+
+      const plan = await planCollection.findOne(query);
+      res.send(plan);
+    });
+
+    // Subscription
+
+    app.post("/api/subscriptions", async (req, res) => {
+      const data = req.body;
+      const subInfo = {
+        ...data,
+        createdAt: new Date(),
+      };
+
+      const result = await subscriptionCollection.insertOne(subInfo);
+
+      // Update the user information
+      const filter = { email: data.email };
+
+      const updateDocument = {
+        $set: {
+          plan: data.planId,
+        },
+      };
+      const updateResult = await usersCollection.updateOne(
+        filter,
+        updateDocument,
+      );
+
+      res.send(updateResult);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
