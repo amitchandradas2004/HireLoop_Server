@@ -103,12 +103,74 @@ async function run() {
     });
 
     //company related api will be here:
+    // app.get("/api/companies", async (req, res) => {
+    //   const cursor = companyCollection.find();
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
+
+    //inificient way to join/aggregate collection
     app.get("/api/companies", async (req, res) => {
       const cursor = companyCollection.find();
+      const companies = await cursor.toArray();
+
+      for (const company of companies) {
+        const filter = {
+          companyId: company._id.toString(),
+        };
+        const jobCount = await jobCollection.countDocuments(filter);
+
+        company.jobCount = jobCount;
+      }
+      res.send(companies);
+    });
+
+    //aggregate : skip and limit
+    app.get("/api/companies2", async (req, res) => {
+      const pipeline = [
+        {
+          $skip: 5,
+        },
+        {
+          $limit: 2,
+        },
+      ];
+
+      const cursor = companyCollection.aggregate(pipeline);
       const result = await cursor.toArray();
       res.send(result);
     });
 
+    // type select
+
+    app.get("/api/stats", async (req, res) => {
+      const pipeline = [
+        {
+          $group: {
+            _id: "$jobType",
+            count: {
+              $sum: 1,
+            },
+          },
+        },
+        {
+          $project: {
+            jobType: "$_id",
+            _id: 0,
+            count: 1,
+          },
+        },
+        {
+          $sort: {
+            count: 1,
+          },
+        },
+      ];
+
+      const cursor = jobCollection.aggregate(pipeline);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
     app.get("/api/my/companies", async (req, res) => {
       const query = {};
       if (req.query.recruiterId) {
