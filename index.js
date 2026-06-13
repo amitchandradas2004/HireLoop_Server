@@ -44,8 +44,8 @@ async function run() {
     const applicationsCollection = database.collection("applications");
     const planCollection = database.collection("plans");
     const subscriptionCollection = database.collection("subscription");
-
     const sessionCollection = database.collection("session");
+
     //Verification related apis here
     const verifyToken = async (req, res, next) => {
       console.log("Headers", req.headers);
@@ -53,31 +53,29 @@ async function run() {
       if (!authHeader) {
         return res.status(401).send({ message: "Unauthorized access" });
       }
-
       const token = authHeader.split(" ")[1];
-
       if (!token) {
         return res.status(401).send({ message: "Unauthorized access" });
       }
-
       const query = { token: token };
-
       const session = await sessionCollection.findOne(query);
+      if (!session) {
+        return res.status(401).send({ message: "Unauthorized access" });
+      }
 
       const userId = session.userId;
-
       const userQuery = {
         _id: userId,
       };
-
       const user = await usersCollection.findOne(userQuery);
-
+      if (!user) {
+        return res.status(401).send({ message: "Unauthorized access" });
+      }
       //set data in the req Object
       req.user = user;
-
       next();
     };
-
+    //must be used after  verifyToken middleware
     const verifySeeker = async (req, res, next) => {
       if (req.user?.role !== "seeker") {
         return res.status(403).send({ message: "Forbidden Access" });
@@ -85,11 +83,27 @@ async function run() {
       next();
     };
 
-    app.get("/api/users", async (req, res) => {
-      const cursor = usersCollection.find().skip(1);
-      const result = await cursor.toArray();
-      res.send(result);
-    });
+    //must be used after  verifyToken middleware
+    const verifyAdmin = async (req, res, next) => {
+      if (req.user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+    //must be used after  verifyToken middleware
+    const verifyRecruiter = async (req, res, next) => {
+      if (req.user?.role !== "recruiter") {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+    // Jobs related apis
+    
+    // app.get("/api/users", async (req, res) => {
+    //   const cursor = usersCollection.find().skip(1);
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
     app.get("/api/jobs", async (req, res) => {
       const query = {};
       if (req.query.companyId) {
@@ -104,7 +118,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/api/jobs", async (req, res) => {
+    app.post("/api/jobs", verifyRecruiter, async (req, res) => {
       const job = req.body;
 
       const newJob = {
@@ -148,6 +162,7 @@ async function run() {
         res.send(result);
       },
     );
+
     app.post("/api/applications", async (req, res) => {
       const application = req.body;
       const newApplication = {
@@ -166,7 +181,7 @@ async function run() {
     // });
 
     //inificient way to join/aggregate collection
-    app.get("/api/companies", verifyToken, async (req, res) => {
+    app.get("/api/companies", verifyToken, verifyAdmin, async (req, res) => {
       const cursor = companyCollection.find();
       const companies = await cursor.toArray();
 
@@ -198,7 +213,6 @@ async function run() {
     });
 
     // type select
-
     app.get("/api/stats", async (req, res) => {
       const pipeline = [
         {
@@ -246,21 +260,25 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/api/companies/:id", looger, verifyToken, async (req, res) => {
-      const id = req.params.id;
-      const updatedCompany = req.body;
-      const filter = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          status: updatedCompany.status,
-        },
-      };
-      const result = await companyCollection.updateOne(filter, updatedDoc);
-      res.send(result);
-    });
+    app.patch(
+      "/api/companies/:id",
+      verifyToken,
+
+      async (req, res) => {
+        const id = req.params.id;
+        const updatedCompany = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            status: updatedCompany.status,
+          },
+        };
+        const result = await companyCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      },
+    );
 
     // Plans
-
     app.get("/api/plans", async (req, res) => {
       const query = {};
       if (req.query.plan_id) {
@@ -270,9 +288,7 @@ async function run() {
       const plan = await planCollection.findOne(query);
       res.send(plan);
     });
-
     // Subscription
-
     app.post("/api/subscriptions", async (req, res) => {
       const data = req.body;
       const subInfo = {
