@@ -98,7 +98,7 @@ async function run() {
       next();
     };
     // Jobs related apis
-    
+
     // app.get("/api/users", async (req, res) => {
     //   const cursor = usersCollection.find().skip(1);
     //   const result = await cursor.toArray();
@@ -106,13 +106,42 @@ async function run() {
     // });
     app.get("/api/jobs", async (req, res) => {
       const query = {};
+      //job filter related query
+      if (req.query.search) {
+        query.$or = [
+          { jobTitle: { $regex: req.query.search, $options: "i" } },
+          { companyName: { $regex: req.query.search, $options: "i" } },
+        ];
+      }
+      if (req.query.jobType) {
+        query.jobType = req.query.jobType;
+      }
+      if (req.query.jobCategory) {
+        query.jobCategory = req.query.jobCategory;
+      }
+      if (req.isRemote) {
+        query.isRemote = req.query.isRemote;
+      }
+
+      //company related query
       if (req.query.companyId) {
         query.companyId = req.query.companyId;
       }
       if (query.status) {
         query.status = req.query.status;
       }
+      //pagination related work
+      if (req.query.page) {
+        const page = req.query.page;
+        const perPage = req.query.perPage || 12;
+        const skipItems = (page - 1) * perPage;
 
+        const total = await jobCollection.countDocuments(query);
+
+        const cursor = jobCollection.find(query).skip(skipItems).limit(perPage);
+        const jobs = await cursor.toArray();
+        return res.send({ total, jobs });
+      }
       const cursor = jobCollection.find(query);
       const result = await cursor.toArray();
       res.send(result);
@@ -314,7 +343,7 @@ async function run() {
       res.send(updateResult);
     });
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
