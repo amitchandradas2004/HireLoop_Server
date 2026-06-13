@@ -16,6 +16,11 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
+const looger = (req, res, next) => {
+  console.log("Looger mildeware looged", req.params);
+  next();
+};
+
 const uri = process.env.MONGODB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -39,6 +44,46 @@ async function run() {
     const applicationsCollection = database.collection("applications");
     const planCollection = database.collection("plans");
     const subscriptionCollection = database.collection("subscription");
+
+    const sessionCollection = database.collection("session");
+    //Verification related apis here
+    const verifyToken = async (req, res, next) => {
+      console.log("Headers", req.headers);
+      const authHeader = req.headers?.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "Unauthorized access" });
+      }
+
+      const token = authHeader.split(" ")[1];
+
+      if (!token) {
+        return res.status(401).send({ message: "Unauthorized access" });
+      }
+
+      const query = { token: token };
+
+      const session = await sessionCollection.findOne(query);
+
+      const userId = session.userId;
+
+      const userQuery = {
+        _id: userId,
+      };
+
+      const user = await usersCollection.findOne(userQuery);
+
+      //set data in the req Object
+      req.user = user;
+
+      next();
+    };
+
+    const verifySeeker = async (req, res, next) => {
+      if (req.user?.role !== "seeker") {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
 
     app.get("/api/users", async (req, res) => {
       const cursor = usersCollection.find().skip(1);
@@ -80,18 +125,29 @@ async function run() {
     });
 
     //application related api will be here
-    app.get("/api/applications", async (req, res) => {
-      const query = {};
-      if (req.query.applicantId) {
-        query.applicantId = req.query.applicantId;
-      }
-      if (req.query.jobId) {
-        query.jobId = req.query.jobId;
-      }
-      const cursor = applicationsCollection.find(query);
-      const result = await cursor.toArray();
-      res.send(result);
-    });
+    app.get(
+      "/api/applications",
+      verifyToken,
+      verifySeeker,
+      async (req, res) => {
+        const query = {};
+        if (req.query.applicantId) {
+          query.applicantId = req.query.applicantId;
+
+          // check  wheather asking for his/her information or someone else
+          console.log(req.user, req.query.applicantId);
+          if (req.user._id.toString() !== req.query.applicantId) {
+            return res.status(403).send({ message: "Forbidden Access" });
+          }
+        }
+        if (req.query.jobId) {
+          query.jobId = req.query.jobId;
+        }
+        const cursor = applicationsCollection.find(query);
+        const result = await cursor.toArray();
+        res.send(result);
+      },
+    );
     app.post("/api/applications", async (req, res) => {
       const application = req.body;
       const newApplication = {
@@ -110,7 +166,7 @@ async function run() {
     // });
 
     //inificient way to join/aggregate collection
-    app.get("/api/companies", async (req, res) => {
+    app.get("/api/companies", verifyToken, async (req, res) => {
       const cursor = companyCollection.find();
       const companies = await cursor.toArray();
 
@@ -190,7 +246,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/api/companies/:id", async (req, res) => {
+    app.patch("/api/companies/:id", looger, verifyToken, async (req, res) => {
       const id = req.params.id;
       const updatedCompany = req.body;
       const filter = { _id: new ObjectId(id) };
